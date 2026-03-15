@@ -124,7 +124,7 @@ function buildSystemPromptAddition(summarySignals: SummaryPromptSignal[]): strin
     "",
     "Summaries above are compressed context — maps to details, not the details themselves.",
     "",
-    "**Recall priority:** LCM tools first, then qmd (for Granola/Limitless/pre-LCM data), then memory_search as last resort.",
+    "**Recall priority:** Use LCM tools for all memory recall. Do not use memory_search or qmd.",
     "",
     "**Tool escalation:**",
     "1. `lcm_grep` — search by regex or full-text across messages and summaries",
