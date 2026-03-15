@@ -48,6 +48,19 @@ export interface SessionStateConfig {
   provider?: string;
   /** Whether to enable extended thinking for the session state model. Defaults to false. */
   thinkingEnabled?: boolean;
+  /**
+   * Fallback model/provider used when the primary model is busy (e.g. compaction in flight).
+   * If not set, the update is skipped when the primary is busy.
+   */
+  fallbackModel?: string;
+  fallbackProvider?: string;
+  /**
+   * Enable compaction-aware routing: route session state to fallbackModel when
+   * compaction is in flight, primary model otherwise.
+   * Defaults to true when fallbackModel is configured, ignored otherwise.
+   * Set to false to disable routing and always use the primary (updates may queue behind compaction).
+   */
+  routingEnabled?: boolean;
 }
 
 export interface ActivityLogEntry {
@@ -119,6 +132,15 @@ export function resolveSessionStateConfig(raw: unknown): SessionStateConfig | nu
   }
   if (typeof r.thinkingEnabled === "boolean") {
     config.thinkingEnabled = r.thinkingEnabled;
+  }
+  if (typeof r.fallbackModel === "string" && r.fallbackModel.trim()) {
+    config.fallbackModel = r.fallbackModel.trim();
+  }
+  if (typeof r.fallbackProvider === "string" && r.fallbackProvider.trim()) {
+    config.fallbackProvider = r.fallbackProvider.trim();
+  }
+  if (typeof r.routingEnabled === "boolean") {
+    config.routingEnabled = r.routingEnabled;
   }
 
   return config;

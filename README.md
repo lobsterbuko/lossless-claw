@@ -327,11 +327,46 @@ The activity log timestamps match the format used in DAG summaries (same timezon
 | `activityLog.enabled` | boolean | `true` | Rolling activity log with timestamps |
 | `activityLog.maxEntries` | integer | `10` | Max log entries before oldest rolls off |
 | `activityLog.recallHint` | boolean | `true` | Add `lcm_grep(...)` hint in log header |
-| `model` | string | *(summaryModel)* | Dedicated model for session state updates — separates it from compaction on the same model |
-| `provider` | string | *(summaryProvider)* | Provider for the dedicated session state model |
+| `model` | string | *(summaryModel)* | Primary model for session state updates — separates it from compaction on the same model |
+| `provider` | string | *(summaryProvider)* | Provider for the primary session state model |
 | `thinkingEnabled` | boolean | `false` | Enable extended thinking for the session state model (recommended for small models doing complex field extraction) |
+| `fallbackModel` | string | — | Fallback model used when the primary is busy with compaction (compaction-aware router) |
+| `fallbackProvider` | string | — | Provider for the fallback model |
+| `routingEnabled` | boolean | `true` | Enable/disable compaction-aware routing. When `true` (default) and a fallback model is configured, session state calls route to the fallback whenever compaction is in flight. Set to `false` to always use the primary model (updates may queue behind compaction) or to temporarily disable routing without removing the fallback config |
 
 The state document is persisted to the LCM SQLite database and survives gateway restarts. Updates are fail-open — if the summary model returns garbage, the previous state is kept.
+
+### Compaction-aware routing (poor man's router)
+
+When running multiple local models, compaction and session state updates can contend for the same GPU. The compaction-aware router solves this by detecting when compaction is in flight and routing session state calls to a fallback model instead.
+
+**How it works:**
+
+1. The engine tracks a `compactionInFlight` counter, incremented when any compaction pass starts and decremented when it finishes.
+2. When `maybeUpdateSessionState` fires, it checks the counter:
+   - Counter is 0 (compaction idle) → use the primary model (`model`/`provider`)
+   - Counter > 0 (compaction running) → use the fallback model (`fallbackModel`/`fallbackProvider`)
+3. If the counter > 0 and no fallback is configured, the session state update is **skipped** for that turn (fail-open — better than queuing behind a 60-120s compaction call).
+
+**Recommended setup for a three-model cluster:**
+
+```json
+{
+  "sessionState": {
+    "provider": "mac-mini-9b",
+    "model": "Qwen3.5-9B",
+    "fallbackProvider": "mac-studio-4b",
+    "fallbackModel": "Qwen3.5-4B",
+    "routingEnabled": true
+  }
+}
+```
+
+This keeps compaction (always 9B) and session state (9B when free, 4B when 9B is busy) separated from the main inference model. The 4B fallback handles the edge case where compaction and a session state update would otherwise collide.
+
+**To disable routing** without removing the fallback config: set `"routingEnabled": false`. Session state calls will always go to the primary model. If that model is busy with compaction, the update will queue or timeout (30s backstop).
+
+**To disable session state when primary is busy** without a fallback: omit `fallbackModel`. The engine will skip the update when compaction is in flight.
 
 ### Model tuning recommendations
 

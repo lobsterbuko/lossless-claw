@@ -619,6 +619,8 @@ export class LcmContextEngine implements ContextEngine {
   private contextPolicyCache = new Map<string, ContextPolicy | null>();
   /** Guard: prevents concurrent session state model calls from saturating the summary model. */
   private sessionStateUpdateInFlight = false;
+  /** Counter: number of compaction operations currently in progress (leaf or condensed). */
+  private compactionInFlight = 0;
   private deps: LcmDependencies;
 
   constructor(deps: LcmDependencies) {
@@ -1343,13 +1345,23 @@ export class LcmContextEngine implements ContextEngine {
       if (ssConfig.updateOn === "mutation" && !hasMutation) return;
 
       // Always resolve credentials via resolveSummaryModelAccess (handles apiKey,
-      // providerApi, auth profile, etc.), then override provider/model if a
-      // dedicated session state model is configured in the agent policy.
+      // providerApi, auth profile, etc.), then override provider/model based on
+      // routing: use the primary session state model when available, fall back to
+      // the fallback model when compaction is in flight (primary model is busy).
       const modelAccess = await this.resolveSummaryModelAccess(legacyParams);
       if (!modelAccess) return;
 
-      const ssProvider = ssConfig.provider ?? modelAccess.provider;
-      const ssModel = ssConfig.model ?? modelAccess.model;
+      const routingEnabled = ssConfig.routingEnabled !== false && !!(ssConfig.fallbackModel || ssConfig.fallbackProvider);
+      const compactionBusy = this.compactionInFlight > 0;
+      const useFallback = routingEnabled && compactionBusy;
+      if (compactionBusy && !routingEnabled) {
+        // Routing disabled and primary is busy — skip this update rather than queuing behind compaction.
+        this.deps.log.warn("[lcm] session-state: skipping update — compaction in flight, routing disabled");
+        return;
+      }
+
+      const ssProvider = (useFallback ? ssConfig.fallbackProvider : ssConfig.provider) ?? modelAccess.provider;
+      const ssModel = (useFallback ? ssConfig.fallbackModel : ssConfig.model) ?? modelAccess.model;
       const ssApiKey = modelAccess.apiKey;
       const ssProviderApi = modelAccess.providerApi;
 
@@ -1688,7 +1700,9 @@ export class LcmContextEngine implements ContextEngine {
     previousSummaryContent?: string;
   }): Promise<CompactResult> {
     this.ensureMigrated();
-    return this.withSessionQueue(params.sessionId, async () => {
+    this.compactionInFlight++;
+    try {
+    return await this.withSessionQueue(params.sessionId, async () => {
       const conversation = await this.conversationStore.getConversationBySessionId(
         params.sessionId,
       );
@@ -1747,6 +1761,9 @@ export class LcmContextEngine implements ContextEngine {
         },
       };
     });
+    } finally {
+      this.compactionInFlight = Math.max(0, this.compactionInFlight - 1);
+    }
   }
 
   async compact(params: {
@@ -1761,7 +1778,9 @@ export class LcmContextEngine implements ContextEngine {
     force?: boolean;
   }): Promise<CompactResult> {
     this.ensureMigrated();
-    return this.withSessionQueue(params.sessionId, async () => {
+    this.compactionInFlight++;
+    try {
+    return await this.withSessionQueue(params.sessionId, async () => {
       const { sessionId, force = false } = params;
 
       // Look up conversation
@@ -1893,6 +1912,9 @@ export class LcmContextEngine implements ContextEngine {
         },
       };
     });
+    } finally {
+      this.compactionInFlight = Math.max(0, this.compactionInFlight - 1);
+    }
   }
 
   async prepareSubagentSpawn(params: {
