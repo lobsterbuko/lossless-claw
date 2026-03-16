@@ -2,6 +2,8 @@
 
 The mission is simple: make small, locally run agents feel dramatically less confused, less forgetful, less fragile under tool pressure, and much more capable over long sessions. We want a local agent to stay sharp, call tools better, execute more reliably, and keep moving without the operator reaching for `/new`. For cloud users, that also means a lot less waste: fewer useless tokens, less repeated context stuffing, and cleaner retrieval. For knowledge, the dream is very much like the Matrix: "I know kung fu" - a way to zap-import expert knowledge as a queryable substrate the agent can reach for on demand. The long-term goal is to make a modest local model feel as close as possible to a big premium model like Claude Opus or GPT-class frontier inference, while staying local-first and operationally sane.
 
+Architecture is explained visually in two CCOS block diagrams: [Turn_Flow_Diagram.png](/Users/jbukow/.openclaw/claw-context-operating-system/Turn_Flow_Diagram.png) and [Context_Assembly_Details.png](/Users/jbukow/.openclaw/claw-context-operating-system/Context_Assembly_Details.png).
+
 -----------------------------------------------------------------------------
 MOST IMPORTANT THINGS CCOS CHANGES
 -----------------------------------------------------------------------------
