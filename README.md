@@ -20,58 +20,6 @@ SHORT ARCHITECTURE FLOW
 
 OpenClaw runs the agent turn. `lossless-claw` provides the base DAG memory engine. CCOS sits on top of that engine and decides what to keep hot, what to compress, what to evict, what to store as session truth, what to keep in external knowledge packs, and what to retrieve back into context only when needed. The whole system is trying to do one thing well: store broadly, retrieve narrowly, and keep the active prompt lean enough for a small model to think clearly.
 
-graph TD
-    %% Styling
-    classDef user fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,color:#000
-    classDef engine fill:#fff3e0,stroke:#f57c00,stroke-width:2px,color:#000
-    classDef execution fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#000
-    classDef tools fill:#fce4ec,stroke:#c2185b,stroke-width:2px,color:#000
-
-    %% Nodes
-    A[User Sends Message]:::user
-    
-    subgraph CCOS Pre-Flight
-        B[Pressure Loop]:::engine
-        C[Compact History & Trim Fresh-Tail]:::engine
-    end
-    
-    subgraph Prompt Assembly
-        D[Inject Session State Ledger]:::engine
-        E[Inject Memory/Knowledge Hints]:::engine
-    end
-    
-    subgraph Execution
-        F[Main Reasoning Model Evaluates]:::execution
-    end
-    
-    subgraph Tool Handling
-        G{Tool Call Required?}:::tools
-        H[Execute Tool]:::tools
-        I[Output Hygiene Interception]:::tools
-        J[Truncate via toolResultCap & Extract]:::tools
-    end
-    
-    subgraph Post-Flight
-        K[Generate/Refresh Session-State]:::engine
-    end
-    
-    L[Final Agent Response]:::user
-
-    %% Routing
-    A --> B
-    B --> C
-    C --> D
-    D --> E
-    E --> F
-    
-    F --> G
-    G -->|Yes| H
-    H --> I
-    I --> J
-    J --> K
-    K -->|Re-evaluate with lean context| F
-    
-    G -->|No| L
 
 -----------------------------------------------------------------------------
 DETAILED ARCHITECTURE
