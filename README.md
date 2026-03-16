@@ -2,13 +2,14 @@
 
 The mission is simple: make small, locally run agents feel dramatically less confused, less forgetful, less fragile under tool pressure, and much more capable over long sessions. We want a local agent to stay sharp, call tools better, execute more reliably, and keep moving without the operator reaching for `/new`. For cloud users, that also means a lot less waste: fewer useless tokens, less repeated context stuffing, and cleaner retrieval. For knowledge, the dream is very much like the Matrix: "I know kung fu" - a way to zap-import expert knowledge as a queryable substrate the agent can reach for on demand. The long-term goal is to make a modest local model feel as close as possible to a big premium model like Claude Opus or GPT-class frontier inference, while staying local-first and operationally sane.
 
-Architecture is explained visually in two CCOS block diagrams: [Turn_Flow_Diagram.png](./Turn_Flow_Diagram.png) and [Context_Assembly_Details.png](./Context_Assembly_Details.png).
+-----------------------------------------------------------------------------
+SHORT ARCHITECTURE FLOW
+-----------------------------------------------------------------------------
 
-![Turn Flow Diagram](./Turn_Flow_Diagram.png)
-![Context Assembly Details](./Context_Assembly_Details.png)
+OpenClaw runs the agent turn. `lossless-claw` provides the base DAG memory engine. CCOS sits on top of that engine and decides what to keep hot, what to compress, what to evict, what to store as session truth, what to keep in external knowledge packs, and what to retrieve back into context only when needed. The whole system is trying to do one thing well: store broadly, retrieve narrowly, and keep the active prompt lean enough for a small model to think clearly.
 
 -----------------------------------------------------------------------------
-MOST IMPORTANT THINGS CCOS CHANGES
+WHAT THINGS CCOS CHANGES
 -----------------------------------------------------------------------------
 
 -Configure all aspects of your Agents context - what stays, what goes, how it's saved, when it's changed. Actively managed context on every turn. Vastly improves executive function and latency on local agents, and dramatically improves token churn.
@@ -20,19 +21,18 @@ MOST IMPORTANT THINGS CCOS CHANGES
 - Encourage multiple local models: Busy-aware model routing. Session-state and compaction work can be split across different local model lanes, with configurable `fallbackOnBusy`, `fallbackOnFailure`, and per-agent timeouts.
 
 -----------------------------------------------------------------------------
-SHORT ARCHITECTURE FLOW
------------------------------------------------------------------------------
-
-OpenClaw runs the agent turn. `lossless-claw` provides the base DAG memory engine. CCOS sits on top of that engine and decides what to keep hot, what to compress, what to evict, what to store as session truth, what to keep in external knowledge packs, and what to retrieve back into context only when needed. The whole system is trying to do one thing well: store broadly, retrieve narrowly, and keep the active prompt lean enough for a small model to think clearly.
-
-
------------------------------------------------------------------------------
 DETAILED ARCHITECTURE
 -----------------------------------------------------------------------------
 
 CCOS extends base `lossless-claw` instead of replacing it. The upstream DAG summarization layer still does the foundational work: message persistence, summary graph construction, and recall over compacted history. What CCOS adds is the operational layer that makes long-lived agents actually usable under local-model constraints. Before assembly, CCOS can run a pressure loop to compact history early instead of discovering budget overflow too late. During assembly, it can trim the fresh tail, classify tool results by provenance, evict stale observed facts after mutations, prune low-value acknowledgments, and cap giant tool outputs. After tool-heavy turns, it can generate or refresh a session-state document that acts like a compact working memory ledger: current task, active project, last error, pending follow-up, active files, and next step. That session-state block can then be injected back into later turns as a small structured stabilizer.
 
 Knowledge is handled separately from lived experience. This is a core design decision. Conversation history, tool results, summaries, and session state are one kind of memory: experiential memory. Imported manuals, SOPs, reports, textbooks, and reference docs are another: installed knowledge. CCOS stores those in separate SQLite tables, chunks them, optionally embeds them, mounts them per agent, and retrieves them on demand through `lcm_knowledge_search` and `lcm_knowledge_list`. Mounted packs do not get dumped into the prompt wholesale. The agent sees only the titles and blurbs of what is available, then asks for the specific pieces it needs. That keeps the context window skinny and the agent mentally healthy.
+
+Architecture is explained visually in two CCOS block diagrams: [Turn_Flow_Diagram.png](./Turn_Flow_Diagram.png) and [Context_Assembly_Details.png](./Context_Assembly_Details.png).
+
+![Turn Flow Diagram](./Turn_Flow_Diagram.png)
+![Context Assembly Details](./Context_Assembly_Details.png)
+
 
 -----------------------------------------------------------------------------
 WHAT CCOS FUNCTIONALLY DOES
@@ -361,7 +361,7 @@ CURRENT REAL-WORLD SHAPE OF THE STACK
 
 In the current installation this fork has been living in, the system has been run as a split local stack:
 
-- a large reasoning lane for main agent turns
+- a 27B reasoning lane for main agent turns
 - a 9B summary/session-state lane
 - a 4B fallback lane for selective session-state routing
 - local embedding and reranker services for memory and knowledge retrieval
